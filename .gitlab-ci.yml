@@ -1,0 +1,46 @@
+# GitLab Pages pipeline for Queue Quest.
+#
+# Deploys the Vite production build (dist/) to GitLab Pages.
+# When hosted at a project subpath (e.g. https://<group>.gitlab.io/<project>/),
+# GitLab Pages exposes the deployed URL via CI_PAGES_URL. The Vite base is set
+# to './' in vite.config.ts so the same build works at any subpath.
+#
+# If you need an explicit base path, set VITE_BASE_PATH as a CI/CD variable.
+
+image: node:20
+
+stages:
+  - test
+  - deploy
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+    - .npm/
+
+test:
+  stage: test
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - npm run typecheck
+    - npm run test
+  only:
+    - branches
+    - merge_requests
+
+pages:
+  stage: deploy
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - npm run test
+    - npm run build
+    - rm -rf public
+    - mv dist public
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
