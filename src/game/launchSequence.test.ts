@@ -4,7 +4,7 @@ import { runSimulation } from './simulation';
 import { calculateProjections } from './projections';
 import { applyScenario } from './scenario';
 import { generateDailyChallenge } from './daily';
-import { buildLaunchSequence, LAUNCH_TIMING } from './launchSequence';
+import { buildLaunchSequence, LAUNCH_TIMING, LAUNCH_REDUCED_SCALE, LAUNCH_SKIP_AFTER_MS } from './launchSequence';
 import type { GameConfig, Level } from './types';
 
 function level(id: number): Level {
@@ -112,11 +112,49 @@ describe('launch sequence — determinism & reveal discipline', () => {
         }
     });
 
-    it('total duration sits in the 3.5–5s anticipation band', () => {
+    it('total duration sits in the 7.5–8.5s anticipation band', () => {
         const { model } = modelFor(level(1), base);
-        expect(model.totalMs).toBeGreaterThanOrEqual(3500);
-        expect(model.totalMs).toBeLessThanOrEqual(5000);
+        expect(model.totalMs).toBeGreaterThanOrEqual(7500);
+        expect(model.totalMs).toBeLessThanOrEqual(8500);
         expect(model.totalMs).toBe(Object.values(LAUNCH_TIMING).reduce((s, v) => s + v, 0));
+    });
+
+    it('reduced motion compresses the sequence to roughly 2–3s, keeping every beat', () => {
+        const { model } = modelFor(level(1), base);
+        const reducedTotal = model.totalMs * LAUNCH_REDUCED_SCALE;
+        expect(reducedTotal).toBeGreaterThanOrEqual(2000);
+        expect(reducedTotal).toBeLessThanOrEqual(3000);
+        // Compression never drops informational phases — same beats, shorter.
+        expect(model.phases.length).toBe(8);
+    });
+
+    it('plays the beats in the escalating tension order', () => {
+        const { model } = modelFor(level(2), base);
+        expect(model.phases.map(p => p.id)).toEqual([
+            'live', 'surge', 'botfilter', 'waves', 'server', 'checkout', 'inventory', 'finalize',
+        ]);
+    });
+
+    it('the Skip affordance lands in the 1.5–2s window', () => {
+        expect(LAUNCH_SKIP_AFTER_MS).toBeGreaterThanOrEqual(1500);
+        expect(LAUNCH_SKIP_AFTER_MS).toBeLessThanOrEqual(2000);
+    });
+
+    it('building the presentation never mutates the simulation result', () => {
+        const eff = applyScenario(level(3));
+        const result = runSimulation(eff, base);
+        const snapshot = JSON.stringify(result);
+        buildLaunchSequence(eff, base, calculateProjections(eff, base), result);
+        expect(JSON.stringify(result)).toBe(snapshot);
+    });
+
+    it('server meter climbs in two stages toward its true value', () => {
+        const { model } = modelFor(level(2), base);
+        expect(model.serverEarlyPct).toBeGreaterThan(0);
+        expect(model.serverEarlyPct).toBeLessThan(model.serverLoadPct);
+        // The peak-stress beat exists and carries the server story.
+        const server = model.phases.find(p => p.id === 'server')!;
+        expect(server.label).toBe('SERVER UNDER LOAD');
     });
 
     it('tickets countdown is inventory, derived from the real run, never negative', () => {

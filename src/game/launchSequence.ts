@@ -12,7 +12,7 @@
 
 import type { Level, GameConfig, ProjectionResult, SimulationResult } from './types';
 
-export type LaunchPhaseId = 'live' | 'surge' | 'botfilter' | 'waves' | 'checkout' | 'finalize';
+export type LaunchPhaseId = 'live' | 'surge' | 'botfilter' | 'waves' | 'server' | 'checkout' | 'inventory' | 'finalize';
 export type LaunchTone = 'good' | 'warning' | 'danger';
 
 export interface LaunchPhase {
@@ -38,6 +38,8 @@ export interface LaunchVisualModel {
 
     // Server node
     serverLoadPct: number;
+    /** Meter level during the WAVES beat — the SERVER beat completes the climb. */
+    serverEarlyPct: number;
     serverTone: LaunchTone;
     serverCritical: boolean;                     // shake/critical copy ONLY when truly unstable
 
@@ -62,21 +64,32 @@ export interface LaunchVisualModel {
     totalMs: number;
 }
 
-// Tension-curve timing (ms). Total ≈ 4s: long enough for anticipation, short
-// enough that repeat runs stay tolerable (a Skip appears after the first second).
+// Tension-curve timing (ms). Total = 8s: calm → rising traffic → concern →
+// peak stress (the dedicated SERVER UNDER LOAD beat) → partial resolution →
+// suspense → reveal. Each beat is long enough to actually READ its counters;
+// a Skip appears after ~1.8s so repeat runs are never trapped.
 export const LAUNCH_TIMING: Record<LaunchPhaseId, number> = {
-    live: 500,
-    surge: 700,
-    botfilter: 800,
-    waves: 800,
-    checkout: 700,
-    finalize: 500,
+    live: 800,        // waiting room opens, request counter starts climbing
+    surge: 1200,      // traffic accelerates, demand counter climbs visibly
+    botfilter: 1200,  // blocked/leaked becomes readable — did the bot setup work?
+    waves: 1300,      // release pattern: staggered groups vs one dump; load starts rising
+    server: 1300,     // PEAK STRESS — load approaches its true run-derived level
+    checkout: 1200,   // successes/failures accumulate, inventory starts dropping
+    inventory: 700,   // ticket counter closes toward its final state
+    finalize: 300,    // brief held breath, then the reveal
 };
 
-/** Reduced-motion runs compress every phase by this factor (states are kept). */
+/** Reduced-motion runs compress every phase by this factor (8s → 2.4s; states are kept). */
 export const LAUNCH_REDUCED_SCALE = 0.3;
 /** The Skip affordance appears after this much of the sequence has played. */
-export const LAUNCH_SKIP_AFTER_MS = 1000;
+export const LAUNCH_SKIP_AFTER_MS = 1800;
+
+/**
+ * How far (fraction of the true value) the server meter climbs during the WAVES
+ * beat, before the SERVER beat carries it the rest of the way — the gradual
+ * approach is what gives the peak-stress moment time to land.
+ */
+export const LAUNCH_SERVER_EARLY_FRACTION = 0.55;
 
 // Visual thresholds — aligned with the Results screen's metric bands, the
 // simulation trace tones, and the config console's risk meters so the launch
@@ -108,6 +121,7 @@ export function buildLaunchSequence(
     // to 100 on most heavy onsales and would show every run as identical.
     // CRITICAL messaging keys off the ACTUAL resulting stability — never faked.
     const serverLoadPct = Math.min(100, projections.loadRisk);
+    const serverEarlyPct = Math.round(serverLoadPct * LAUNCH_SERVER_EARLY_FRACTION);
     const serverCritical = result.siteStability < STABILITY_CRITICAL;
     const serverTone: LaunchTone = serverLoadPct > LOAD_HOT ? 'danger' : serverLoadPct > LOAD_WARM ? 'warning' : 'good';
 
@@ -151,21 +165,34 @@ export function buildLaunchSequence(
                 : 'Filters holding — automated traffic contained at the gate.',
         },
         {
+            // Release-pattern beat: HOW the crowd hits — load only STARTS here.
             id: 'waves', durationMs: LAUNCH_TIMING.waves,
-            tone: serverCritical ? 'red' : serverTone === 'danger' ? 'red' : serverTone === 'warning' ? 'amber' : 'green',
+            tone: waveStyle === 'single-surge' ? 'amber' : waveStyle === 'strained' ? 'amber' : 'green',
             label: waveStyle === 'single-surge' ? 'SINGLE-WAVE RELEASE' : 'ENTRY WAVES RELEASED',
+            detail: waveStyle === 'single-surge'
+                ? 'No staggering — the entire crowd is heading for the server at once.'
+                : waveStyle === 'strained'
+                    ? `${config.waveCount} waves releasing — repeated surges queuing up against the platform.`
+                    : `${config.waveCount} organized waves releasing — the crowd is entering in controlled groups.`,
+        },
+        {
+            // PEAK STRESS — the anxiety beat. Load completes its climb to the true
+            // run-derived level; CRITICAL messaging only when stability truly broke.
+            id: 'server', durationMs: LAUNCH_TIMING.server,
+            tone: serverCritical || serverTone === 'danger' ? 'red' : serverTone === 'warning' ? 'amber' : 'green',
+            label: 'SERVER UNDER LOAD',
             detail: serverCritical
                 ? 'LOAD CRITICAL — infrastructure is buckling under the release.'
-                : waveStyle === 'single-surge'
-                    ? 'The entire crowd hits the server at once — load spiking.'
-                    : waveStyle === 'strained'
-                        ? `${config.waveCount} waves releasing — repeated surges stressing the platform.`
-                        : `${config.waveCount} organized waves releasing — load spreading as planned.`,
+                : serverTone === 'danger'
+                    ? 'Load pushing deep into the red — systems holding… barely.'
+                    : serverTone === 'warning'
+                        ? 'Pressure climbing hard — the platform is strained but standing.'
+                        : 'Load rising under the full crowd — the platform is holding steady.',
         },
         {
             id: 'checkout', durationMs: LAUNCH_TIMING.checkout,
             tone: checkoutStruggling ? 'red' : frictionSlow ? 'amber' : 'green',
-            label: 'CHECKOUT UNDER LOAD',
+            label: 'CHECKOUT PROCESSING',
             detail: checkoutStruggling
                 ? 'Checkout failures accumulating — carts timing out under pressure.'
                 : frictionSlow
@@ -173,11 +200,19 @@ export function buildLaunchSequence(
                     : 'Checkout processing cleanly — inventory moving to real fans.',
         },
         {
+            // Partial resolution: inventory closes toward its final state.
+            id: 'inventory', durationMs: LAUNCH_TIMING.inventory,
+            tone: fairnessImbalance ? 'amber' : 'cyan',
+            label: 'INVENTORY CLOSING',
+            detail: fairnessImbalance
+                ? 'Final allocations processing — allocation imbalance flagged for the debrief.'
+                : 'Final allocations processing — the last seats are being assigned.',
+        },
+        {
+            // The held breath: the player still doesn't know if it worked.
             id: 'finalize', durationMs: LAUNCH_TIMING.finalize, tone: 'cyan',
             label: 'FINALIZING ONSALE',
-            detail: fairnessImbalance
-                ? 'Closing the books — allocation imbalance flagged for the debrief.'
-                : 'Closing the books — compiling the operation record…',
+            detail: 'Compiling the operation record…',
         },
     ];
 
@@ -191,6 +226,7 @@ export function buildLaunchSequence(
         botLeaked,
         botTone,
         serverLoadPct,
+        serverEarlyPct,
         serverTone,
         serverCritical,
         waveCount: config.waveCount,

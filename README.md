@@ -178,11 +178,11 @@ Every result metric answers *what it means, what caused it, and what to try next
 
 ## Launch Anticipation Sequence
 
-Hitting **LAUNCH ONSALE** plays a ~4-second escalating "live onsale" moment (`src/game/launchSequence.ts` + `SimulationScreen.tsx`) before the Results reveal:
+Hitting **LAUNCH ONSALE** plays an ~8-second escalating "live onsale" moment (`src/game/launchSequence.ts` + `SimulationScreen.tsx`) before the Results reveal:
 
 - **Truth-telling, not decoration**: `buildLaunchSequence(level, config, projections, result)` is a pure presentation model derived from the *already-computed* deterministic result (computed at launch time in `App.tsx`; no second simulation). Bot leakage, server pressure (the projection's load-risk, since raw sim load saturates), wave style, checkout health, and allocation warnings all mirror the actual run — controlled configs look controlled, struggling configs visibly struggle. The final score is **never** shown before Results (test-pinned).
-- **Tension curve**: SYSTEM LIVE → REQUEST SURGE → BOT FILTER ENGAGED → ENTRY WAVES / SINGLE-WAVE RELEASE → CHECKOUT UNDER LOAD → FINALIZING (timings in `LAUNCH_TIMING`, total 4.0s). A compact pipeline (waiting room → bot filter → server → checkout → tickets-left countdown) lights up node by node; "LOAD CRITICAL" + subtle shake fire only when stability is genuinely below the critical band.
-- **Skip / replay**: a subtle keyboard-accessible "Skip to Results" appears after ~1s (Escape also skips). Reduced motion compresses the timeline to ~30% and drops packet/meter animation while keeping every informational state. Daily Challenge runs flow through the same screen with their generated venue/demand context; the Training Shift keeps its instant debrief.
+- **Tension curve** (calm → rising traffic → concern → peak stress → partial resolution → suspense → reveal): SYSTEM LIVE → REQUEST SURGE → BOT FILTER ENGAGED → ENTRY WAVES / SINGLE-WAVE RELEASE → **SERVER UNDER LOAD** (the dedicated peak-stress beat — the meter climbs to ~55% of its true level on the wave release, then completes the climb here) → CHECKOUT PROCESSING → INVENTORY CLOSING → FINALIZING (timings in `LAUNCH_TIMING`, total 8.0s). A compact pipeline (waiting room → bot filter → server → checkout → tickets-left countdown) lights up node by node; "LOAD CRITICAL" + subtle shake fire only when stability is genuinely below the critical band, and even stable runs read tense ("strained but standing") rather than boring.
+- **Skip / replay**: a subtle keyboard-accessible "Skip to Results" appears after ~1.8s (Escape also skips) — repeat players are never trapped, but replays are never auto-skipped. Reduced motion compresses the timeline to ~30% (8s → ~2.4s) and drops packet/meter animation while keeping every informational beat. Daily Challenge runs flow through the same screen with their generated venue/demand context; the Training Shift keeps its instant debrief.
 - Audio hooks (`request_surge`, `bot_filter`, `server_warning`, `checkout`, `result_reveal`) route through the existing no-op sink.
 
 ## Onboarding — Training Shift
@@ -350,7 +350,7 @@ Migration (in `records.test.ts`): missing/non-numeric/future versions reset to a
 
 - Tour-flag parsing/recovery (corrupt, wrong-version, unknown ids), persistence round-trip, accumulation across tours, no-window safety, and key separation from game records
 
-228 tests total, all passing.
+233 tests total, all passing.
 
 ## Accessibility
 

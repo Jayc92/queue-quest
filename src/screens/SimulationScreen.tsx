@@ -35,15 +35,16 @@ const tone3Text: Record<LaunchTone, string> = { good: 'text-green-400', warning:
 const tone3Bar: Record<LaunchTone, string> = { good: 'bg-green-500', warning: 'bg-amber-500', danger: 'bg-red-500' };
 
 const PHASE_ICON: Record<string, IconName> = {
-    live: 'Clock', surge: 'Users', botfilter: 'Bot', waves: 'Layers', checkout: 'Check', finalize: 'Activity',
+    live: 'Clock', surge: 'Users', botfilter: 'Bot', waves: 'Layers', server: 'Server', checkout: 'Check', inventory: 'Ticket', finalize: 'Activity',
 };
-// Sound hook per phase entry (server_warning only on genuine critical stress).
+// Sound hook per phase entry, spread across the 8s curve
+// (server_warning only on genuine critical stress).
 function phaseSound(model: LaunchVisualModel, id: string): SoundEvent | null {
     switch (id) {
         case 'live': return 'queue_open';
         case 'surge': return 'request_surge';
         case 'botfilter': return 'bot_filter';
-        case 'waves': return model.serverCritical ? 'server_warning' : null;
+        case 'server': return model.serverCritical ? 'server_warning' : null;
         case 'checkout': return 'checkout';
         default: return null;
     }
@@ -59,6 +60,12 @@ export function SimulationScreen({ level, config, results, onComplete }: Props) 
     const reduced = useMemo(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches, []);
     const scale = reduced ? LAUNCH_REDUCED_SCALE : 1;
     const phaseMs = useCallback((i: number) => Math.round(model.phases[i].durationMs * scale), [model, scale]);
+    // Duration lookup by beat id — keeps node/counter timings tied to LAUNCH_TIMING
+    // (the single source of truth) rather than positional index math.
+    const msOf = useCallback((id: string) => {
+        const p = model.phases.find(ph => ph.id === id);
+        return Math.round((p?.durationMs ?? 0) * scale);
+    }, [model, scale]);
 
     const [phaseIdx, setPhaseIdx] = useState(0);
     const [skippable, setSkippable] = useState(false);
@@ -104,8 +111,8 @@ export function SimulationScreen({ level, config, results, onComplete }: Props) 
     const t = toneRing[phase.tone];
     const reached = useCallback((id: string) => model.phases.findIndex(p => p.id === id) <= phaseIdx, [model, phaseIdx]);
 
-    // Waiting-room counter runs across the live+surge phases.
-    const waitingMs = phaseMs(0) + phaseMs(1);
+    // Waiting-room counter climbs across the live+surge beats (eased, readable).
+    const waitingMs = msOf('live') + msOf('surge');
     const waiting = useCountUp(model.demand, waitingMs);
 
     // Packet lane: deterministic pseudo-random packet mix (red = leaked bot share).
@@ -159,37 +166,50 @@ export function SimulationScreen({ level, config, results, onComplete }: Props) 
 
                     <PipelineNode active={reached('botfilter')} icon="Bot" label="BOT FILTER" tone={model.botTone}
                         chip={reached('botfilter') ? (model.botLeaked ? { text: 'BOT LEAK', tone: model.botTone === 'danger' ? 'danger' : 'warning' } : { text: 'CONTAINED', tone: 'good' }) : undefined}>
-                        <Meter active={reached('botfilter')} pct={model.botBlockedPct} tone={model.botTone} durationMs={phaseMs(2)} reduced={reduced} />
+                        <Meter active={reached('botfilter')} pct={model.botBlockedPct} tone={model.botTone} durationMs={msOf('botfilter')} reduced={reduced} />
                         <span className={`font-mono tabular-nums text-[11px] ${tone3Text[model.botTone]}`}>{reached('botfilter') ? `${model.botBlockedPct}% blocked` : 'standing by'}</span>
                     </PipelineNode>
 
+                    {/* Server: load STARTS climbing on the wave release, then completes
+                        its rise to the true run-derived level during the peak-stress
+                        SERVER beat — the anxiety moment gets time to land. */}
                     <PipelineNode active={reached('waves')} icon="Server" label="SERVER" tone={model.serverTone}
-                        shake={model.serverCritical && reached('waves') && !reduced}
-                        chip={reached('waves')
+                        shake={model.serverCritical && reached('server') && !reduced}
+                        chip={reached('server')
                             ? (model.serverCritical ? { text: 'LOAD CRITICAL', tone: 'danger' } : { text: model.waveCount === 1 ? 'SINGLE WAVE' : `${model.waveCount} WAVES`, tone: model.serverTone })
-                            : undefined}>
-                        <Meter active={reached('waves')} pct={model.serverLoadPct} tone={model.serverTone} durationMs={phaseMs(3)} reduced={reduced} />
-                        <span className={`font-mono tabular-nums text-[11px] ${tone3Text[model.serverTone]}`}>{reached('waves') ? `load ${model.serverLoadPct}%` : 'standing by'}</span>
+                            : reached('waves')
+                                ? { text: model.waveCount === 1 ? 'SINGLE WAVE' : `${model.waveCount} WAVES`, tone: model.waveStyle === 'organized' ? 'good' : 'warning' }
+                                : undefined}>
+                        <Meter
+                            active={reached('waves')}
+                            pct={reached('server') ? model.serverLoadPct : model.serverEarlyPct}
+                            tone={reached('server') ? model.serverTone : 'warning'}
+                            durationMs={reached('server') ? msOf('server') : msOf('waves')}
+                            reduced={reduced}
+                        />
+                        <span className={`font-mono tabular-nums text-[11px] ${reached('server') ? tone3Text[model.serverTone] : 'text-amber-400'}`}>
+                            {reached('server') ? `load ${model.serverLoadPct}%` : reached('waves') ? `load ${model.serverEarlyPct}%` : 'standing by'}
+                        </span>
                     </PipelineNode>
 
                     <PipelineNode active={reached('checkout')} icon="Check" label="CHECKOUT" tone={model.checkoutStruggling ? 'danger' : 'good'}
                         chip={reached('checkout')
                             ? (model.checkoutStruggling ? { text: 'FAILURES', tone: 'danger' } : model.frictionSlow ? { text: 'VERIFY QUEUE', tone: 'warning' } : { text: 'PROCESSING', tone: 'good' })
                             : undefined}>
-                        <Meter active={reached('checkout')} pct={model.checkoutPct} tone={model.checkoutStruggling ? 'danger' : 'good'} durationMs={phaseMs(4)} reduced={reduced} />
+                        <Meter active={reached('checkout')} pct={model.checkoutPct} tone={model.checkoutStruggling ? 'danger' : 'good'} durationMs={msOf('checkout')} reduced={reduced} />
                         <span className={`font-mono tabular-nums text-[11px] ${model.checkoutStruggling ? 'text-red-400' : 'text-green-400'}`}>{reached('checkout') ? `${model.checkoutPct}% completing` : 'standing by'}</span>
                     </PipelineNode>
                 </div>
 
-                {/* Inventory countdown */}
+                {/* Inventory countdown — drops through checkout, closes during INVENTORY */}
                 <div className={`mt-2 panel px-3 py-2 flex items-center justify-between transition-opacity ${reached('checkout') ? '' : 'opacity-40'}`}>
                     <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Tickets Left</span>
                     <div className="flex items-center gap-2">
-                        {model.fairnessImbalance && reached('finalize') && (
+                        {model.fairnessImbalance && reached('inventory') && (
                             <span className="px-1.5 py-0.5 text-[9px] font-mono rounded border border-amber-500/50 bg-amber-500/10 text-amber-400">ALLOCATION IMBALANCE</span>
                         )}
                         {reached('checkout')
-                            ? <TicketsCountdown start={model.ticketsStart} end={model.ticketsEnd} durationMs={phaseMs(4) + phaseMs(5)} />
+                            ? <TicketsCountdown start={model.ticketsStart} end={model.ticketsEnd} durationMs={msOf('checkout') + msOf('inventory')} />
                             : <span className="font-mono font-bold tabular-nums text-white">{model.ticketsStart.toLocaleString('en-US')}</span>}
                     </div>
                 </div>
