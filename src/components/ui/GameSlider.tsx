@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { playSound } from '../../game/audio';
+
 interface GameSliderProps {
     label: string;
     value: number;
@@ -14,11 +17,27 @@ export function GameSlider({ label, value, onChange, min, max, step = 1, unit = 
     const pct = ((value - min) / (max - min)) * 100;
     const sliderId = id || `slider-${label.replace(/\s+/g, '-').toLowerCase()}`;
 
+    // Bumping a nonce on each change restarts the one-shot pulse/tick animations.
+    const [pulseKey, setPulseKey] = useState(0);
+
+    const handleChange = (next: number) => {
+        if (next !== value) {
+            playSound('slider');
+            setPulseKey(k => k + 1);
+        }
+        onChange(next);
+    };
+
     return (
         <div className="space-y-1">
             <div className="flex items-center justify-between">
                 <label htmlFor={sliderId} className="text-sm text-slate-300 font-medium">{label}</label>
-                <span className="font-mono text-cyan-400 font-bold text-lg tabular-nums">{value}{unit}</span>
+                <span
+                    key={pulseKey}
+                    className="font-mono text-cyan-400 font-bold text-lg tabular-nums inline-block animate-value-pulse"
+                >
+                    {value}{unit}
+                </span>
             </div>
             <div className="relative h-11">
                 <div className="slider-track">
@@ -31,7 +50,7 @@ export function GameSlider({ label, value, onChange, min, max, step = 1, unit = 
                     max={max}
                     step={step}
                     value={value}
-                    onChange={(e) => onChange(Number(e.target.value))}
+                    onChange={(e) => handleChange(Number(e.target.value))}
                     className="slider-input"
                     aria-label={label}
                     aria-valuemin={min}

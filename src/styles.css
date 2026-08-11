@@ -168,6 +168,8 @@ button {
 .z-10 { z-index: 10; }
 .z-20 { z-index: 20; }
 .z-30 { z-index: 30; }
+.z-40 { z-index: 40; }
+.z-50 { z-index: 50; }
 
 .flex-1 { flex: 1 1 0%; }
 .flex-col { flex-direction: column; }
@@ -475,6 +477,14 @@ button:focus-visible,
         0%, 100% { color: #f87171; }
         50% { color: #ef4444; text-shadow: 0 0 6px rgba(239, 68, 68, 0.6); }
     }
+    @keyframes urgent-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        50% { box-shadow: 0 0 10px 1px rgba(239, 68, 68, 0.45); }
+    }
+    @keyframes launch-intensify {
+        0%, 100% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
+        50% { box-shadow: 0 0 28px rgba(34, 197, 94, 0.6); }
+    }
     .animate-pulse-line { animation: pulse-line 4s ease-in-out infinite; }
     .animate-packet { animation: packet-flow 5s linear infinite; }
     .animate-scan { animation: scan 6s linear infinite; }
@@ -489,9 +499,138 @@ button:focus-visible,
     .animate-queue-flow { animation: queue-flow-lane 3s linear infinite; }
     .animate-countdown { animation: countdown-pulse 1.5s ease-in-out infinite; }
     .animate-ping { animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
+    .animate-urgent { animation: urgent-pulse 1.4s ease-in-out infinite; }
+    .animate-launch-intense { animation: launch-intensify 1.1s ease-in-out infinite; }
+
+    /* ----- Juice pass: microinteractions & feedback ----- */
+
+    /* One-shot glow pulse for slider values / HUD numbers when they change */
+    @keyframes value-pulse {
+        0% { transform: scale(1); text-shadow: 0 0 0 rgba(34, 211, 238, 0); }
+        35% { transform: scale(1.14); text-shadow: 0 0 10px rgba(34, 211, 238, 0.7); }
+        100% { transform: scale(1); text-shadow: 0 0 0 rgba(34, 211, 238, 0); }
+    }
+    .animate-value-pulse { animation: value-pulse 0.35s ease-out; }
+
+    /* One-shot tick for the slider thumb / track on movement */
+    @keyframes tick-pop {
+        0% { transform: scaleY(1); }
+        40% { transform: scaleY(1.6); }
+        100% { transform: scaleY(1); }
+    }
+    .animate-tick { animation: tick-pop 0.25s ease-out; }
+
+    /* Segmented control press: quick compress then settle */
+    @keyframes press-pop {
+        0% { transform: scale(1); }
+        45% { transform: scale(0.94); }
+        100% { transform: scale(1); }
+    }
+    .animate-press { animation: press-pop 0.2s ease-out; }
+
+    /* Count-up numbers on results: rise + fade */
+    @keyframes count-rise {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-count-rise { animation: count-rise 0.4s ease-out both; }
+
+    /* Record badge entrance: pop in with slight overshoot */
+    @keyframes badge-pop {
+        0% { opacity: 0; transform: scale(0.7); }
+        60% { opacity: 1; transform: scale(1.08); }
+        100% { opacity: 1; transform: scale(1); }
+    }
+    .animate-badge-pop { animation: badge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+    /* Medal reveal: settle in from a spin-less zoom + halo */
+    @keyframes medal-reveal {
+        0% { opacity: 0; transform: scale(0.5); }
+        70% { transform: scale(1.12); }
+        100% { opacity: 1; transform: scale(1); }
+    }
+    .animate-medal { animation: medal-reveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+    /* Rotating conic halo behind a mastered medal (premium treatment) */
+    @keyframes halo-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .animate-halo { animation: halo-spin 6s linear infinite; }
+
+    /* Strong pulsing glow ring for STRONG CLEAR / MASTERED headers */
+    @keyframes reward-glow {
+        0%, 100% { box-shadow: 0 0 24px rgba(251, 191, 36, 0.25); }
+        50% { box-shadow: 0 0 40px rgba(251, 191, 36, 0.55); }
+    }
+    .animate-reward-glow { animation: reward-glow 2.4s ease-in-out infinite; }
+
+    /* Campaign complete: system-online sweep on the banner */
+    @keyframes system-online {
+        0% { opacity: 0; transform: translateY(14px) scale(0.98); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .animate-system-online { animation: system-online 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+    /* Gold light sweep across the campaign banner */
+    @keyframes gold-sweep {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(220%); }
+    }
+    .animate-gold-sweep { animation: gold-sweep 2.8s ease-in-out infinite; }
+
+    /* Staggered fade-in for action buttons */
+    @keyframes fade-in-up {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up { animation: fade-in-up 0.4s ease-out both; }
+
+    /* Mission card active-state breathing outline */
+    @keyframes objective-glow {
+        0%, 100% { border-color: rgba(34, 211, 238, 0.25); }
+        50% { border-color: rgba(34, 211, 238, 0.6); }
+    }
+    .animate-objective { animation: objective-glow 2.6s ease-in-out infinite; }
+
+    /* Live decision card: slide in from the right edge with a soft overshoot */
+    @keyframes decision-slide-in {
+        0% { opacity: 0; transform: translateX(40px) scale(0.97); }
+        70% { opacity: 1; transform: translateX(-4px) scale(1.01); }
+        100% { opacity: 1; transform: translateX(0) scale(1); }
+    }
+    .animate-decision-in { animation: decision-slide-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+    /* Decision alert border pulse — draws the eye without being frantic */
+    @keyframes decision-alert {
+        0%, 100% { box-shadow: 0 0 18px rgba(251, 191, 36, 0.25); border-color: rgba(251, 191, 36, 0.55); }
+        50% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.5); border-color: rgba(251, 191, 36, 0.85); }
+    }
+    .animate-decision-alert { animation: decision-alert 1.6s ease-in-out infinite; }
 }
 @media (prefers-reduced-motion: reduce) {
     .animate-slide-up { opacity: 1 !important; }
+    /* Ensure one-shot entrance animations still reveal content when motion is off */
+    .animate-count-rise,
+    .animate-badge-pop,
+    .animate-medal,
+    .animate-system-online,
+    .animate-decision-in,
+    .animate-fade-in-up { opacity: 1 !important; transform: none !important; }
+}
+
+/* ----- Interaction primitives (safe in all motion modes) ----- */
+
+/* Tactile press feedback for buttons — instant, no keyframes, works with reduced motion */
+.qq-press { transition: transform 0.08s ease, box-shadow 0.12s ease, background-color 0.15s ease; }
+.qq-press:active { transform: scale(0.96); }
+
+/* Interactive lift for cards on hover (subtle) */
+.qq-lift { transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease; }
+.qq-lift:hover { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+    .qq-lift:hover { transform: none; }
+    .qq-press:active { transform: none; }
 }
 
 /* ---------- Grid utilities ---------- */
@@ -544,3 +683,57 @@ button:focus-visible,
 
 /* Legacy compatibility for existing prototype selectors */
 .hover\:scale-105:hover { transform: scale(1.05); }
+
+/* ---------- First-time UI walkthrough (UiTour) ---------- */
+
+/* Screen-reader-only text (visually hidden, still announced). */
+.sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Swallows background clicks/taps while a tour is open (Skip/Esc always work). */
+.qq-tour-blocker { position: fixed; inset: 0; z-index: 70; }
+
+/* Spotlight: the giant box-shadow dims everything EXCEPT the cutout. */
+.qq-tour-spotlight {
+    position: fixed; z-index: 71; pointer-events: none;
+    border-radius: 10px;
+    border: 2px solid #22d3ee;
+    box-shadow: 0 0 0 9999px rgba(3, 7, 12, 0.78), 0 0 18px rgba(34, 211, 238, 0.45);
+}
+
+/* Full dim for steps with no anchored target (centered panel). */
+.qq-tour-dim { position: fixed; inset: 0; z-index: 71; background: rgba(3, 7, 12, 0.78); pointer-events: none; }
+
+/* Coach panel. */
+.qq-tour-panel {
+    position: fixed; z-index: 72;
+    width: min(340px, calc(100vw - 24px));
+    background: linear-gradient(180deg, #0d1117 0%, #0a0e14 100%);
+    border: 1px solid rgba(34, 211, 238, 0.5);
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    outline: none;
+}
+.qq-tour-panel:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+
+/* Unobtrusive fixed Help / replay-tour control. */
+.qq-tour-help {
+    position: fixed; left: 12px; z-index: 45;
+    width: 34px; height: 34px; border-radius: 9999px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid #334155;
+    color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.qq-tour-help:hover { color: #22d3ee; border-color: rgba(6, 182, 212, 0.5); }
+
+@media (prefers-reduced-motion: no-preference) {
+    .qq-tour-spotlight { transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease; }
+    .qq-tour-panel { transition: top 0.2s ease, left 0.2s ease; }
+}

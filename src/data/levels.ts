@@ -1,16 +1,18 @@
 import type { Level } from '../game/types';
 
-// Verified passing setups (documented, tested):
+// Verified passing setups (documented, tested). Pars/ranks rebalanced for a smooth
+// L1→L5 ramp and reachable mastery on every mission (see ranks.ts STRONG/MASTER deltas).
+// Bands per mission: CLEAR = par, STRONG = par+6, MASTER = par+12.
 // L1 Small Venue:  { botDetection:'high', verification:'basic', purchaseLimit:2, resale:'face',
-//                    waveCount:2, waveInterval:15, waitingRoomTime:2, presalePercent:20, accessiblePercent:6 } ≈ 72/65 CLEAR
+//                    waveCount:2, waveInterval:15, waitingRoomTime:2, presalePercent:20, accessiblePercent:6 } ≈ 72/58 MASTER
 // L2 Arena:        { botDetection:'high', verification:'basic', purchaseLimit:4, resale:'caps',
-//                    waveCount:4, waveInterval:20, waitingRoomTime:2, presalePercent:25, accessiblePercent:5 } ≈ 69/65 CLEAR
+//                    waveCount:4, waveInterval:20, waitingRoomTime:2, presalePercent:25, accessiblePercent:5 } ≈ 69/61 STRONG
 // L3 Festival:     { botDetection:'high', verification:'basic', purchaseLimit:4, resale:'caps',
-//                    waveCount:4, waveInterval:20, waitingRoomTime:3, presalePercent:20, accessiblePercent:8 } ≈ 73/65 CLEAR
+//                    waveCount:4, waveInterval:20, waitingRoomTime:3, presalePercent:20, accessiblePercent:8 } ≈ 73/62 MASTER
 // L4 Playoff:      { botDetection:'high', verification:'verified', purchaseLimit:2, resale:'face',
-//                    waveCount:3, waveInterval:20, waitingRoomTime:1, presalePercent:30, accessiblePercent:5 } ≈ 77/60 STRONG
+//                    waveCount:3, waveInterval:20, waitingRoomTime:1, presalePercent:30, accessiblePercent:5 } ≈ 77/63 MASTER
 // L5 Mega:         { botDetection:'high', verification:'verified', purchaseLimit:2, resale:'face',
-//                    waveCount:4, waveInterval:20, waitingRoomTime:2, presalePercent:25, accessiblePercent:8 } ≈ 73/55 STRONG
+//                    waveCount:4, waveInterval:20, waitingRoomTime:2, presalePercent:25, accessiblePercent:8 } ≈ 73/62 MASTER
 
 export const LEVELS: Level[] = [
     {
@@ -23,11 +25,35 @@ export const LEVELS: Level[] = [
         botPressure: 0.15,
         resalePressure: 0.30,
         serverRisk: 0.20,
-        parScore: 65,
+        parScore: 58,
         icon: 'Building',
         threatProfile: 'Low Threat / Emotional Stakes',
         constraint: 'Small capacity amplifies scarcity — every wasted seat hurts fairness.',
         weights: { fans: 0.28, bots: 0.10, checkout: 0.15, satisfaction: 0.20, stability: 0.10, fairness: 0.17 },
+        identity: {
+            threatLevel: 'Low',
+            primaryConcern: 'Fair Distribution',
+            missionType: 'Community Onsale',
+            briefing: {
+                situation: 'A beloved local act announced a surprise hometown show. Demand is passionate but manageable, and the crowd is largely genuine fans — not scalpers.',
+                threatAssessment: 'Bot activity is minimal. Server headroom is comfortable. The real challenge is scarcity: ten fans for every seat.',
+                operationalGoal: 'Learn the console. Spread tickets fairly with light staggering and proportional bot defense.',
+                knownRisks: ['Small capacity magnifies every wasted seat', 'Over-tightening controls needlessly frustrates loyal fans'],
+                successCriteria: 'Reach the target score by serving real fans and keeping the process fair. Few warnings should fire.',
+            },
+            scenario: {
+                id: 'quiet-open',
+                label: 'Calm waiting room',
+                detail: 'No anomalies detected. A clean environment to learn the controls.',
+                severity: 'warning',
+                // No parameter changes — the training mission stays clean.
+            },
+            resultSummary: {
+                strong: 'Textbook operation. Fans were served fairly and the queue never strained.',
+                pass: 'Solid fundamentals. Fair access held and the small house filled cleanly.',
+                fail: 'Even a low-pressure house needs fair distribution — too many real fans missed out.',
+            },
+        },
     },
     {
         id: 2,
@@ -39,11 +65,36 @@ export const LEVELS: Level[] = [
         botPressure: 0.45,
         resalePressure: 0.60,
         serverRisk: 0.55,
-        parScore: 65,
+        parScore: 61,
         icon: 'Stadium',
         threatProfile: 'Bot Networks / High Load',
         constraint: 'Concurrency spikes are severe. Waves and bot defense carry the weight.',
         weights: { fans: 0.22, bots: 0.18, checkout: 0.18, satisfaction: 0.16, stability: 0.15, fairness: 0.11 },
+        identity: {
+            threatLevel: 'High',
+            primaryConcern: 'Server Stability',
+            missionType: 'Mass Onsale',
+            briefing: {
+                situation: 'A major pop act drops a single arena date. Half a million requests are converging on 40,000 seats, and traffic is arriving faster than the platform was provisioned for.',
+                threatAssessment: 'Bot networks are probing the waiting room. Concurrency spikes threaten to overwhelm checkout. This is the first real traffic-management test.',
+                operationalGoal: 'Keep the platform standing. Stagger entry into waves and raise bot defense to survive the surge.',
+                knownRisks: ['A single-wave open will spike load past capacity', 'Under-defended queues let bot fleets seize inventory'],
+                successCriteria: 'Hold stability and checkout through the surge while blocking the bulk of bot traffic.',
+            },
+            scenario: {
+                id: 'traffic-surge',
+                label: 'Unexpected traffic surge',
+                detail: 'Social buzz drove an early rush — concurrent load is running hotter than forecast.',
+                severity: 'danger',
+                serverRiskMult: 1.15,
+                demandMult: 1.05,
+            },
+            resultSummary: {
+                strong: 'The server remained stable despite sustained load, and bot fleets were largely shut out.',
+                pass: 'The platform held through the surge — staggering kept load survivable.',
+                fail: 'The surge overwhelmed the queue. Load spiked and checkout buckled before fans got through.',
+            },
+        },
     },
     {
         id: 3,
@@ -55,11 +106,36 @@ export const LEVELS: Level[] = [
         botPressure: 0.35,
         resalePressure: 0.50,
         serverRisk: 0.60,
-        parScore: 65,
+        parScore: 62,
         icon: 'Music',
         threatProfile: 'Allocation Complexity',
         constraint: 'Presale ratio and accessibility coverage carry double weight here.',
         weights: { fans: 0.22, bots: 0.12, checkout: 0.15, satisfaction: 0.18, stability: 0.15, fairness: 0.18 },
+        identity: {
+            threatLevel: 'Moderate',
+            primaryConcern: 'Inventory Allocation',
+            missionType: 'Tiered Festival',
+            briefing: {
+                situation: 'A three-day festival with 50+ acts opens across camping, VIP, and general-admission tiers. Every group wants priority, and there simply is not enough inventory for everyone.',
+                threatAssessment: 'Bot pressure is moderate, but allocation is the battlefield. Over-reserve presale and the public feels shut out; under-reserve accessibility and fairness collapses.',
+                operationalGoal: 'Balance competing tiers. Right-size presale, protect accessibility coverage, and keep the public pool viable.',
+                knownRisks: ['Heavy presale starves the public onsale', 'Thin accessibility coverage tanks fairness', 'Multiple tiers strain the platform at once'],
+                successCriteria: 'Land a fair allocation split that keeps public inventory healthy and accessibility covered.',
+            },
+            scenario: {
+                id: 'vip-reallocation',
+                label: 'VIP allocation changed',
+                detail: 'Promoter expanded VIP holds overnight — public inventory is under extra pressure before doors open.',
+                severity: 'warning',
+                resalePressureMult: 1.1,
+                serverRiskMult: 1.05,
+            },
+            resultSummary: {
+                strong: 'Allocation held across every tier — public, accessible, and presale all got a fair share.',
+                pass: 'A workable split. The public pool survived the tier competition.',
+                fail: 'Public inventory was exhausted earlier than expected — the allocation split left too many out.',
+            },
+        },
     },
     {
         id: 4,
@@ -71,11 +147,36 @@ export const LEVELS: Level[] = [
         botPressure: 0.55,
         resalePressure: 0.90,
         serverRisk: 0.70,
-        parScore: 60,
+        parScore: 63,
         icon: 'Trophy',
         threatProfile: 'Extreme Resale / Short Notice',
         constraint: 'Long waiting rooms are risky with short-notice demand. Resale policy is critical.',
         weights: { fans: 0.20, bots: 0.15, checkout: 0.15, satisfaction: 0.15, stability: 0.15, fairness: 0.20 },
+        identity: {
+            threatLevel: 'Severe',
+            primaryConcern: 'Resale Chaos',
+            missionType: 'Short-Notice Drop',
+            briefing: {
+                situation: 'The home team clinched a playoff berth nobody predicted. Tickets go live with 48 hours notice to an impatient, emotional crowd — and the secondary market is already circling.',
+                threatAssessment: 'Resale pressure is extreme; scalpers are staging to flip inventory instantly. Short notice means a long waiting room only compresses the chaos.',
+                operationalGoal: 'Contain the secondary market. Lock down resale, keep the waiting room tight, and hold fairness under pressure.',
+                knownRisks: ['Open resale hands inventory straight to scalpers', 'Long lead times worsen a short-notice crush', 'Impatient demand punishes any friction'],
+                successCriteria: 'Suppress resale exploitation and serve genuine fans before the secondary market drains the pool.',
+            },
+            scenario: {
+                id: 'scalper-activity',
+                label: 'Scalper activity detected',
+                detail: 'Coordinated resale accounts are massing on the waiting room — secondary-market pressure is spiking.',
+                severity: 'danger',
+                resalePressureMult: 1.12,
+                botPressureMult: 1.08,
+            },
+            resultSummary: {
+                strong: 'Resale restrictions crushed secondary-market pressure and real fans reached checkout first.',
+                pass: 'Resale restrictions reduced secondary market pressure enough to hold the line.',
+                fail: 'Scalpers overwhelmed the onsale — resale controls were too loose for this crowd.',
+            },
+        },
     },
     {
         id: 5,
@@ -87,10 +188,36 @@ export const LEVELS: Level[] = [
         botPressure: 0.70,
         resalePressure: 0.90,
         serverRisk: 0.90,
-        parScore: 55,
+        parScore: 62,
         icon: 'Star',
         threatProfile: 'Maximum Pressure Across All Vectors',
         constraint: 'Every lever matters. Any single mistake collapses a metric.',
         weights: { fans: 0.18, bots: 0.18, checkout: 0.15, satisfaction: 0.15, stability: 0.17, fairness: 0.17 },
+        identity: {
+            threatLevel: 'Critical',
+            primaryConcern: 'Total System Survival',
+            missionType: 'Global Onsale Incident',
+            briefing: {
+                situation: 'The biggest tour in a decade. Millions of requests hammer 150,000 seats across the globe. This is no longer an onsale — it is an incident to be survived.',
+                threatAssessment: 'Every threat vector is maxed at once: enterprise bot fleets, catastrophic load, ravenous resale demand, and a public ready to riot over allocation.',
+                operationalGoal: 'Survive. Every lever matters — waves, defense, verification, resale, and allocation must all hold simultaneously.',
+                knownRisks: ['Any single weak lever collapses a metric', 'Too much friction crushes satisfaction', 'Too little defense hands the show to bots', 'Too few waves triggers full platform collapse'],
+                successCriteria: 'Keep every system above water at once. No metric can be sacrificed at this scale.',
+            },
+            scenario: {
+                id: 'second-bot-wave',
+                label: 'Second bot wave detected',
+                detail: 'A second, larger bot fleet engaged mid-open — automated pressure is climbing beyond initial estimates.',
+                severity: 'danger',
+                botPressureMult: 1.1,
+                serverRiskMult: 1.08,
+                demandMult: 1.05,
+            },
+            resultSummary: {
+                strong: 'Multiple queue waves and layered defense prevented a full platform collapse — a masterful save.',
+                pass: 'The platform survived the incident. It was close, but the queue held together.',
+                fail: 'The system buckled under combined pressure — waves, defense, or allocation gave way and the onsale collapsed.',
+            },
+        },
     },
 ];

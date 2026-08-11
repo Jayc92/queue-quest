@@ -5,10 +5,88 @@ export interface PrimaryCause {
     detail: string;
 }
 
+// A per-metric debrief entry: what went wrong, why, and the concrete next move.
+export interface MetricDiagnostic {
+    label: string;
+    severity: 'warning' | 'danger';
+    why: string;    // what happened + which choice drove it
+    fix: string;    // the specific adjustment to try next
+}
+
+// Diagnose every metric that landed below its healthy band, ordered by how much
+// it hurt the score (weighted deficit). Each entry ties the outcome to the
+// actual config choice and names the concrete adjustment to try — so a player
+// always knows why a metric fell and what to do about it. Returns [] when every
+// metric is healthy. Callers cap the list to keep the debrief concise.
+export function metricDiagnostics(results: SimulationResult, level: Level): MetricDiagnostic[] {
+    const c = results.config;
+    const frictionHeavy = c.botDetection === 'aggressive' || c.verification === 'verified';
+
+    // healthy = "good" band from ResultsScreen; warn = danger cutoff.
+    const specs = [
+        { key: 'fans',     label: 'Fans Served',   value: results.fansServedPct,       weight: level.weights.fans,         good: 50, warn: 25 },
+        { key: 'bots',     label: 'Bots Blocked',  value: results.botsBlockedPct,      weight: level.weights.bots,         good: 70, warn: 50 },
+        { key: 'checkout', label: 'Checkout Rate', value: results.checkoutSuccessRate, weight: level.weights.checkout,     good: 70, warn: 50 },
+        { key: 'sat',      label: 'Satisfaction',  value: results.satisfaction,        weight: level.weights.satisfaction, good: 65, warn: 45 },
+        { key: 'stab',     label: 'Stability',     value: results.siteStability,       weight: level.weights.stability,    good: 60, warn: 40 },
+        { key: 'fair',     label: 'Fairness',      value: results.fairness,            weight: level.weights.fairness,     good: 70, warn: 50 },
+    ] as const;
+
+    const out: MetricDiagnostic[] = [];
+    for (const s of specs) {
+        if (s.value >= s.good) continue;   // healthy — nothing to flag
+        const severity: MetricDiagnostic['severity'] = s.value < s.warn ? 'danger' : 'warning';
+        out.push({ label: s.label, severity, ...explain(s.key, results, level, frictionHeavy) });
+    }
+    // Worst offenders first, by weighted shortfall below the healthy band.
+    return out.sort((a, b) => deficit(b, specs) - deficit(a, specs));
+}
+
+function deficit(d: MetricDiagnostic, specs: readonly { label: string; value: number; weight: number; good: number }[]): number {
+    const s = specs.find(x => x.label === d.label);
+    return s ? (s.good - s.value) * s.weight : 0;
+}
+
+// Config-aware why + fix per metric. Kept terse (one sentence each).
+function explain(key: string, results: SimulationResult, level: Level, frictionHeavy: boolean): { why: string; fix: string } {
+    const c = results.config;
+    switch (key) {
+        case 'fans':
+            if (frictionHeavy) return { why: 'Heavy verification and screening turned real fans away at the door.', fix: 'Ease Verification or Bot Detection one step so more genuine fans get through.' };
+            if (results.checkoutSuccessRate < 60) return { why: 'Checkout kept failing, so fans never completed their purchase.', fix: 'Stabilize load (add an entry wave) so checkout stops timing out.' };
+            if (c.presalePercent > 30) return { why: `A ${c.presalePercent}% presale left too few public seats for the general onsale.`, fix: 'Lower presale toward 20% to reopen the public pool.' };
+            return { why: 'Too few real fans reached a ticket.', fix: 'Reduce friction and shore up stability so more fans convert.' };
+        case 'bots':
+            if (c.botDetection === 'low' || c.botDetection === 'medium') return { why: `${c.botDetection === 'low' ? 'Basic' : 'Standard'} bot detection was overrun at this threat level.`, fix: 'Raise Bot Detection at least one step.' };
+            return { why: 'Enough bots slipped through to skew the pool.', fix: 'Add fan verification (Email or ID) to close the gap.' };
+        case 'checkout':
+            if (c.waveCount === 1) return { why: 'A single-wave open concentrated all load, so checkout buckled.', fix: 'Split entry into 2–4 waves to spread the load.' };
+            if (frictionHeavy) return { why: 'Stacked verification friction slowed checkout to a crawl.', fix: 'Lighten Verification or Bot Detection one step.' };
+            return { why: 'Load pressure pushed checkout past its limit.', fix: 'Add an entry wave or ease friction to steady checkout.' };
+        case 'sat':
+            if (c.botDetection === 'aggressive') return { why: 'Maximum bot screening created false positives that frustrated fans.', fix: 'Drop Bot Detection to Enhanced.' };
+            if (c.verification === 'verified' && level.botPressure < 0.5) return { why: 'ID verification was overkill for this bot level and annoyed fans.', fix: 'Downgrade Verification to Email.' };
+            if (c.waitingRoomTime > 6) return { why: `A ${c.waitingRoomTime}h waiting room made fans wait too long.`, fix: 'Shorten the waiting room toward 1–2h.' };
+            return { why: 'Cumulative friction wore fans down.', fix: 'Reduce friction across detection and verification.' };
+        case 'stab':
+            if (c.waveCount === 1) return { why: 'One wave sent the whole crowd at the server at once.', fix: 'Add entry waves (2–4) to stagger the load.' };
+            if (c.waveCount > 5) return { why: `${c.waveCount} waves caused repeated restarts that stressed the system.`, fix: 'Reduce to 3–4 waves.' };
+            return { why: 'Server load ran hotter than capacity could hold.', fix: 'Add a wave, or raise presale slightly to shed public-sale load.' };
+        case 'fair':
+            if (c.resale === 'none' && level.resalePressure > 0.5) return { why: 'Open resale let scalpers flip inventory instantly.', fix: 'Restrict resale to Cap or Face Value.' };
+            if (c.purchaseLimit > 4) return { why: `A ${c.purchaseLimit}-ticket limit let buyers grab large blocks.`, fix: 'Lower the purchase limit toward 2.' };
+            if (c.presalePercent > 30) return { why: `A ${c.presalePercent}% presale skewed access away from the public.`, fix: 'Trim presale toward 20%.' };
+            if (c.accessiblePercent <= 2) return { why: 'Thin accessible coverage dragged fairness down.', fix: 'Raise accessible seats to at least 5%.' };
+            return { why: 'Distribution tilted away from everyday fans.', fix: 'Tighten resale or lower the purchase limit.' };
+        default:
+            return { why: 'This metric fell below its healthy range.', fix: 'Adjust the related control and re-run.' };
+    }
+}
+
 export function primaryFailureCause(results: SimulationResult, level: Level): PrimaryCause | null {
     const metrics = [
         { key: 'fans',         label: 'Fans Served',   value: results.fansServedPct,       weight: level.weights.fans,         threshold: 30 },
-        { key: 'bots',         label: 'Bot Defense',   value: results.botsBlockedPct,      weight: level.weights.bots,         threshold: 55 },
+        { key: 'bots',         label: 'Bots Blocked',  value: results.botsBlockedPct,      weight: level.weights.bots,         threshold: 55 },
         { key: 'checkout',     label: 'Checkout',      value: results.checkoutSuccessRate, weight: level.weights.checkout,     threshold: 60 },
         { key: 'satisfaction', label: 'Satisfaction',  value: results.satisfaction,        weight: level.weights.satisfaction, threshold: 55 },
         { key: 'stability',    label: 'Site Stability',value: results.siteStability,       weight: level.weights.stability,    threshold: 55 },

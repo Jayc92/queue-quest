@@ -1,5 +1,7 @@
 import { Icon } from '../components/ui/Icon';
 import { StatusChip } from '../components/ui/primitives';
+import { ScreenTour } from '../components/tour/ScreenTour';
+import { HOME_TOUR } from '../data/tours';
 
 export function TitleScreen({ onStart }: { onStart: () => void }) {
     return (
@@ -34,7 +36,7 @@ export function TitleScreen({ onStart }: { onStart: () => void }) {
                 <p className="text-slate-400 text-base md:text-lg mb-1 text-center">Design the queue.</p>
                 <p className="text-slate-400 text-base md:text-lg mb-8 text-center">Survive the onsale.</p>
 
-                <div className="w-full max-w-sm mb-8 panel p-3">
+                <div className="w-full max-w-sm mb-8 panel p-3" data-tour="home-pulse">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500">Live Demand Pulse</span>
                         <span className="text-[10px] font-mono text-red-400 animate-blink">CRITICAL</span>
@@ -61,7 +63,8 @@ export function TitleScreen({ onStart }: { onStart: () => void }) {
 
                 <button
                     onClick={onStart}
-                    className="flex items-center gap-3 px-6 md:px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold text-base md:text-lg rounded transition-all glow-cyan"
+                    data-tour="home-enter"
+                    className="qq-press flex items-center gap-3 px-6 md:px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold text-base md:text-lg rounded transition-all glow-cyan"
                     style={{ color: '#0a0e14' }}
                 >
                     <Icon name="Play" className="w-5 h-5" fill="currentColor" />
@@ -69,7 +72,7 @@ export function TitleScreen({ onStart }: { onStart: () => void }) {
                     <Icon name="ArrowRight" className="w-5 h-5" />
                 </button>
 
-                <div className="mt-8 flex flex-wrap justify-center gap-2 max-w-md">
+                <div className="mt-8 flex flex-wrap justify-center gap-2 max-w-md" data-tour="home-status">
                     <StatusChip label="Demand" value="CRITICAL" status="danger" showIcon />
                     <StatusChip label="Inventory" value="LIMITED" status="warning" showIcon />
                     <StatusChip label="Bots" value="DETECTED" status="danger" showIcon />
@@ -78,11 +81,13 @@ export function TitleScreen({ onStart }: { onStart: () => void }) {
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 border-t border-cyan-900/30 bg-terminal-bg/80 backdrop-blur">
-                <div className="flex items-center gap-2 text-xs text-slate-600 font-mono">
+                <div className="flex items-center gap-2 text-xs text-slate-600 font-mono" data-tour="home-ready">
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-blink" />
                     <span>SYSTEM READY</span>
                 </div>
             </div>
+
+            <ScreenTour tourId="home" steps={HOME_TOUR} helpBottomPx={44} />
         </div>
     );
 }

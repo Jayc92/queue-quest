@@ -4,19 +4,20 @@ import type {
     SimulationResult,
     LeverImpact,
     TraceEvent,
-    BotDetection,
-    Verification,
-    ResalePolicy,
 } from './types';
-
-const BOT_DETECTION_EFFECTIVENESS: Record<BotDetection, number> = { low: 0.20, medium: 0.50, high: 0.78, aggressive: 0.94 };
-const BOT_DETECTION_FRICTION: Record<BotDetection, number> = { low: 0.02, medium: 0.06, high: 0.14, aggressive: 0.30 };
-const VERIFICATION_EFFECTIVENESS: Record<Verification, number> = { none: 0, basic: 0.25, verified: 0.75 };
-const VERIFICATION_FRICTION: Record<Verification, number> = { none: 0, basic: 0.04, verified: 0.18 };
-const RESALE_SATISFACTION: Record<ResalePolicy, number> = { none: -6, caps: 4, face: 10, no_resale: -2 };
-const RESALE_FAIRNESS: Record<ResalePolicy, number> = { none: -12, caps: 4, face: 12, no_resale: 8 };
-const RESALE_FAIRNESS_HIGH_PRESSURE: Record<ResalePolicy, number> = { none: -6, caps: 2, face: 5, no_resale: 4 };
-const RESALE_SATISFACTION_PLAYOFF: Record<ResalePolicy, number> = { none: -6, caps: 2, face: 6, no_resale: 0 };
+// All tuning constants live in balance.ts (SIM + shared lever tables). This
+// module applies them exactly; tune values there, not here.
+import {
+    SIM,
+    BOT_DETECTION_EFFECTIVENESS,
+    BOT_DETECTION_FRICTION,
+    VERIFICATION_EFFECTIVENESS,
+    VERIFICATION_FRICTION,
+    RESALE_SATISFACTION,
+    RESALE_FAIRNESS,
+    RESALE_FAIRNESS_HIGH_PRESSURE,
+    RESALE_SATISFACTION_PLAYOFF,
+} from './balance';
 
 export function runSimulation(level: Level, config: GameConfig): SimulationResult {
     const { seats, demand, botPressure, resalePressure, serverRisk, weights } = level;
@@ -27,34 +28,34 @@ export function runSimulation(level: Level, config: GameConfig): SimulationResul
     const vE = VERIFICATION_EFFECTIVENESS[config.verification];
     const vF = VERIFICATION_FRICTION[config.verification];
 
-    const combinedBotBlock = Math.min(0.98, botDetE + vE * 0.3);
+    const combinedBotBlock = Math.min(SIM.maxBotBlock, botDetE + vE * SIM.verificationBlockScale);
     const botsBlocked = Math.floor(baseBotAttempts * combinedBotBlock);
     const botsGotThrough = baseBotAttempts - botsBlocked;
 
-    const avgBotTickets = Math.max(1, config.purchaseLimit * 0.8);
-    const botTickets = Math.min(seats * 0.4, botsGotThrough * avgBotTickets / config.purchaseLimit);
+    const avgBotTickets = Math.max(1, config.purchaseLimit * SIM.avgBotTicketFactor);
+    const botTickets = Math.min(seats * SIM.botTicketSeatCap, botsGotThrough * avgBotTickets / config.purchaseLimit);
     const waitingRoomHours = config.waitingRoomTime;
-    const botPreparationBonus = Math.max(0, (waitingRoomHours - 1) * 0.03);
-    const shortNoticePenalty = level.id === 4 ? Math.max(0, (waitingRoomHours - 2) * 0.02) : 0;
+    const botPreparationBonus = Math.max(0, (waitingRoomHours - 1) * SIM.botPrepPerHour);
+    const shortNoticePenalty = level.id === 4 ? Math.max(0, (waitingRoomHours - 2) * SIM.shortNoticeBotPerHour) : 0;
     const adjustedBotTickets = botTickets * (1 + botPreparationBonus + shortNoticePenalty);
 
     // Server load — wave count acts as pressure release valve, excess waves stress the system
     const baseLoad = demand / seats;
-    const excessWaves = Math.max(0, config.waveCount - 4);
+    const excessWaves = Math.max(0, config.waveCount - SIM.waveReliefKnee);
     const waveLoadMultiplier = config.waveCount > 1
-        ? Math.max(0.35, 1 - (config.waveCount - 1) * 0.16 + excessWaves * 0.18)
+        ? Math.max(SIM.waveLoadFloor, 1 - (config.waveCount - 1) * SIM.waveReliefPerWave + excessWaves * SIM.waveExcessPenaltyPerWave)
         : 1;
-    const intervalLoadReduction = config.waveCount > 1 ? Math.min(0.12, (config.waveInterval - 5) * 0.003) : 0;
-    const presaleLoadReduction = config.presalePercent * 0.005;
-    const serverScenarioLoad = serverRisk * 1.5;
-    const serverLoad = Math.min(100, (baseLoad * 1.7 * waveLoadMultiplier * (1 - intervalLoadReduction) - presaleLoadReduction + serverScenarioLoad) * 9);
-    const excessWavePenalty = config.waveCount > 5 ? (config.waveCount - 5) * 6 : 0;
-    const longWaitPenalty = waitingRoomHours > 12 ? (waitingRoomHours - 12) * 0.8 : 0;
-    const siteStability = Math.max(20, Math.min(100, 128 - serverLoad * 0.72 - excessWavePenalty - longWaitPenalty));
+    const intervalLoadReduction = config.waveCount > 1 ? Math.min(SIM.intervalReductionCap, (config.waveInterval - 5) * SIM.intervalReductionPerMin) : 0;
+    const presaleLoadReduction = config.presalePercent * SIM.presaleLoadReductionPerPct;
+    const serverScenarioLoad = serverRisk * SIM.serverScenarioLoadMult;
+    const serverLoad = Math.min(100, (baseLoad * SIM.baseLoadMult * waveLoadMultiplier * (1 - intervalLoadReduction) - presaleLoadReduction + serverScenarioLoad) * SIM.loadScale);
+    const excessWavePenalty = config.waveCount > 5 ? (config.waveCount - 5) * SIM.excessWaveStabilityPenalty : 0;
+    const longWaitPenalty = waitingRoomHours > 12 ? (waitingRoomHours - 12) * SIM.longWaitStabilityPenaltyPerHour : 0;
+    const siteStability = Math.max(SIM.stabilityFloor, Math.min(100, SIM.stabilityBase - serverLoad * SIM.stabilityLoadSlope - excessWavePenalty - longWaitPenalty));
 
     const totalFriction = botDetF + vF;
-    const checkoutSuccessRate = Math.max(40, Math.min(98,
-        siteStability * 0.6 + (100 - totalFriction * 100) * 0.4 - (config.waveCount > 4 ? 3 : 0)
+    const checkoutSuccessRate = Math.max(SIM.checkoutMin, Math.min(SIM.checkoutMax,
+        siteStability * SIM.checkoutStabilityWeight + (100 - totalFriction * 100) * SIM.checkoutFrictionWeight - (config.waveCount > 4 ? SIM.checkoutManyWavesPenalty : 0)
     ));
 
     const realFanDemand = demand - baseBotAttempts;
@@ -69,33 +70,33 @@ export function runSimulation(level: Level, config: GameConfig): SimulationResul
     const realFansServed = Math.max(0, Math.floor(ticketsToRealFans / 2)) + presaleTickets + accessibleTickets;
 
     // Satisfaction
-    let satisfaction = 62;
-    satisfaction += (realFansServed / seats) * 30;
-    satisfaction += (checkoutSuccessRate - 50) * 0.3;
-    satisfaction += config.accessiblePercent * 0.6;
-    satisfaction += config.waveCount > 1 && config.waveCount <= 4 ? 10 : 0;
-    satisfaction -= totalFriction * 40;
-    satisfaction -= (100 - siteStability) * 0.3;
-    satisfaction -= waitingRoomHours > 4 ? (waitingRoomHours - 4) * 2 : 0;
-    satisfaction -= config.verification === 'verified' ? 4 : 0;
+    let satisfaction: number = SIM.satisfactionBase;
+    satisfaction += (realFansServed / seats) * SIM.satFansWeight;
+    satisfaction += (checkoutSuccessRate - 50) * SIM.satCheckoutWeight;
+    satisfaction += config.accessiblePercent * SIM.satAccessiblePerPct;
+    satisfaction += config.waveCount > 1 && config.waveCount <= 4 ? SIM.satWaveBonus : 0;
+    satisfaction -= totalFriction * SIM.satFrictionWeight;
+    satisfaction -= (100 - siteStability) * SIM.satInstabilityWeight;
+    satisfaction -= waitingRoomHours > 4 ? (waitingRoomHours - 4) * SIM.satLongWaitPerHour : 0;
+    satisfaction -= config.verification === 'verified' ? SIM.satVerifiedPenalty : 0;
     satisfaction += RESALE_SATISFACTION[config.resale];
     if (config.resale === 'no_resale' && resalePressure < 0.6) satisfaction -= 4;
     if (level.id === 4) satisfaction += RESALE_SATISFACTION_PLAYOFF[config.resale];
-    satisfaction = Math.max(20, Math.min(100, satisfaction));
+    satisfaction = Math.max(SIM.satMin, Math.min(SIM.satMax, satisfaction));
 
     // Fairness
-    let fairness = 58;
-    fairness += (realFansServed / seats) * 20;
-    fairness += (botsBlocked / Math.max(1, baseBotAttempts)) * 15;
-    fairness += config.accessiblePercent * 1.2;
-    fairness -= config.presalePercent > 30 ? (config.presalePercent - 30) * 0.6 : 0;
-    fairness -= config.presalePercent > 40 ? (config.presalePercent - 40) * 0.8 : 0;
-    fairness += vE * 10;
+    let fairness: number = SIM.fairnessBase;
+    fairness += (realFansServed / seats) * SIM.fairFansWeight;
+    fairness += (botsBlocked / Math.max(1, baseBotAttempts)) * SIM.fairBotsBlockedWeight;
+    fairness += config.accessiblePercent * SIM.fairAccessiblePerPct;
+    fairness -= config.presalePercent > SIM.fairPresaleKnee ? (config.presalePercent - SIM.fairPresaleKnee) * SIM.fairPresalePenalty1 : 0;
+    fairness -= config.presalePercent > SIM.fairPresaleKnee2 ? (config.presalePercent - SIM.fairPresaleKnee2) * SIM.fairPresalePenalty2 : 0;
+    fairness += vE * SIM.fairVerificationWeight;
     fairness += RESALE_FAIRNESS[config.resale];
     if (resalePressure > 0.7) fairness += RESALE_FAIRNESS_HIGH_PRESSURE[config.resale];
-    fairness += (8 - config.purchaseLimit) * 2;
-    if (level.id === 3) fairness += config.accessiblePercent * 0.5;
-    fairness = Math.max(20, Math.min(100, fairness));
+    fairness += (8 - config.purchaseLimit) * SIM.fairPurchaseLimitWeight;
+    if (level.id === 3) fairness += config.accessiblePercent * SIM.fairFestivalAccessBonus;
+    fairness = Math.max(SIM.fairMin, Math.min(SIM.fairMax, fairness));
 
     const fansServedPct = Math.min(100, (realFansServed / seats) * 100);
     const botsBlockedPct = (botsBlocked / Math.max(1, baseBotAttempts)) * 100;

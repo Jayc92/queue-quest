@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Level, GameConfig, IconName } from '../game/types';
 import { calculateProjections } from '../game/projections';
+import { UI } from '../game/balance';
 import { Icon } from '../components/ui/Icon';
 
 type Tone = 'cyan' | 'amber' | 'red' | 'green';
@@ -52,18 +53,20 @@ export function SimulationScreen({ level, config, onComplete }: Props) {
                 icon: 'Ticket',
                 tone: thinPublic ? 'amber' : 'cyan',
             },
+            { label: 'Compiling debrief...', detail: 'Scoring the onsale', icon: 'Activity', tone: 'cyan' },
         ];
     }, [level, config]);
 
     useEffect(() => {
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const interval = reduced ? 60 : 350;
+        // 6 phases within < 2s: ~300ms each + a short settle. Reduced motion snaps through fast.
+        const interval = reduced ? UI.simPhaseReducedMs : UI.simPhaseMs;
         let i = 0;
         const timer = setInterval(() => {
             i++;
             if (i >= phases.length) {
                 clearInterval(timer);
-                setTimeout(onComplete, reduced ? 60 : 350);
+                setTimeout(onComplete, reduced ? UI.simPhaseReducedMs : 180);
             } else {
                 setPhase(i);
             }
@@ -84,18 +87,28 @@ export function SimulationScreen({ level, config, onComplete }: Props) {
         <div className="min-h-screen grid-bg flex items-center justify-center p-6">
             <div className="text-center max-w-sm w-full">
                 <div className={`w-20 h-20 mx-auto mb-5 rounded-full border-2 ${t.ring} ${t.bg} flex items-center justify-center ${t.text} relative`}>
-                    <Icon name={current.icon} className="w-10 h-10" />
+                    <span key={phase} className="animate-medal inline-block"><Icon name={current.icon} className="w-10 h-10" /></span>
                     <div className={`absolute inset-0 rounded-full border-2 ${t.pulse} animate-ping`} />
                 </div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-1">Onsale in Progress</div>
-                <h2 className="text-lg font-bold text-white mb-1">{current.label}</h2>
-                <p className={`text-xs ${t.text} mb-6 font-mono`}>{current.detail}</p>
+                {/* Announce each phase to assistive tech as it changes (no visual change). */}
+                <div role="status" aria-live="polite">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-1">Onsale in Progress</div>
+                    <h2 key={`h-${phase}`} className="text-lg font-bold text-white mb-1 animate-count-rise">{current.label}</h2>
+                    <p key={`d-${phase}`} className={`text-xs ${t.text} mb-6 font-mono animate-count-rise`}>{current.detail}</p>
+                </div>
 
-                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                    className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden"
+                    role="progressbar"
+                    aria-label="Simulation progress"
+                    aria-valuemin={0}
+                    aria-valuemax={phases.length}
+                    aria-valuenow={phase + 1}
+                >
                     <div className="h-full bg-cyan-500 transition-all duration-300"
                         style={{ width: `${((phase + 1) / phases.length) * 100}%` }} />
                 </div>
-                <div className="flex justify-center gap-1.5 mt-3">
+                <div className="flex justify-center gap-1.5 mt-3" aria-hidden="true">
                     {phases.map((_, i) => (
                         <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i <= phase ? 'bg-cyan-500' : 'bg-slate-700'}`} />
                     ))}

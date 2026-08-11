@@ -93,20 +93,6 @@ export function ConsolePanel({ title, icon, children, status }: {
     );
 }
 
-// ---------- WarningPill ----------
-export function WarningPill({ warning }: { warning: Warning }) {
-    const colors: Record<'danger' | 'warning', string> = {
-        danger: 'text-red-300 border-red-500/40 bg-red-500/10',
-        warning: 'text-amber-300 border-amber-500/40 bg-amber-500/10',
-    };
-    return (
-        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-xs ${colors[warning.severity]}`}>
-            <Icon name="Alert" className="w-3 h-3" />
-            <span>{warning.label}</span>
-        </div>
-    );
-}
-
 // ---------- WarningAlert (full row) ----------
 export function WarningAlert({ warning }: { warning: Warning }) {
     const styles = {
