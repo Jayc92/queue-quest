@@ -44,6 +44,9 @@ export function App() {
     const [results, setResults] = useState<SimulationResult | null>(null);
     const [improvements, setImprovements] = useState<RecordImprovements | null>(null);
     const [pendingConfig, setPendingConfig] = useState<GameConfig | null>(null);
+    // Result computed at launch time — drives the anticipation sequence, then is
+    // applied to records when the sequence completes.
+    const [pendingResults, setPendingResults] = useState<SimulationResult | null>(null);
     const [lastConfig, setLastConfig] = useState<GameConfig | null>(null);
     const [endlessResult, setEndlessResult] = useState<EndlessRunResult | null>(null);
     const [endlessImprovements, setEndlessImprovements] = useState<EndlessImprovements | null>(null);
@@ -89,17 +92,21 @@ export function App() {
     }, [todaysChallenge]);
 
     const handleRunSimulation = useCallback((config: GameConfig) => {
+        if (!currentLevel) return;
+        // Compute the deterministic result NOW so the launch anticipation sequence
+        // can visualize the actual run (bot leakage, load, checkout health) without
+        // ever running a second simulation. Records are applied only at reveal.
+        // Daily levels carry a descriptive-only scenario, so applyScenario is
+        // identity there; the pre-baked level params ARE what gets simulated.
+        const effectiveLevel = applyScenario(currentLevel);
+        setPendingResults(runSimulation(effectiveLevel, config));
         setPendingConfig(config);
         setScreen('simulating');
-    }, []);
+    }, [currentLevel]);
 
     const handleSimulationComplete = useCallback(() => {
-        if (!currentLevel || !pendingConfig) return;
-        // Run against the scenario-adjusted (effective) level — deterministic per
-        // level. Daily levels carry a descriptive-only scenario (modifier effects
-        // are pre-baked into the level params), so applyScenario is identity there.
-        const effectiveLevel = applyScenario(currentLevel);
-        const simResults = runSimulation(effectiveLevel, pendingConfig);
+        if (!currentLevel || !pendingConfig || !pendingResults) return;
+        const simResults = pendingResults;
         setResults(simResults);
         setLastConfig(pendingConfig);
 
@@ -146,7 +153,7 @@ export function App() {
         else playSound('fail');
 
         setScreen('results');
-    }, [currentLevel, pendingConfig, activeDaily]);
+    }, [currentLevel, pendingConfig, pendingResults, activeDaily]);
 
     const handleNextLevel = useCallback(() => {
         if (!currentLevel) return;
@@ -277,8 +284,8 @@ export function App() {
                     onBack={() => setScreen('briefing')}
                 />
             )}
-            {screen === 'simulating' && currentLevel && pendingConfig && (
-                <SimulationScreen level={currentLevel} config={pendingConfig} onComplete={handleSimulationComplete} />
+            {screen === 'simulating' && currentLevel && pendingConfig && pendingResults && (
+                <SimulationScreen level={currentLevel} config={pendingConfig} results={pendingResults} onComplete={handleSimulationComplete} />
             )}
             {screen === 'results' && currentLevel && results && (
                 <ResultsScreen

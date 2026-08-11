@@ -174,7 +174,16 @@ Every result metric answers *what it means, what caused it, and what to try next
 
 - **`analyzeMetricCauses(level, config, result)`** returns, per metric: a plain-language definition, ranked positive factors, ranked negative factors (each tied to an actual lever value the simulation uses — e.g. "Basic screening only stops 20% of bot traffic"), and one concrete recommendation. Factors are tagged with the lever they describe, and tests assert we never blame a control that doesn't affect that metric (e.g. Bots Blocked is moved *only* by Bot Detection and Verification).
 - **`summarizeRun`** boils the run down to the biggest help, the biggest drag (excluding unfixable context like raw demand), and the single highest-impact change, weighted by the mission's metric weights.
-- **UI**: each Results metric card is tappable (`aria-expanded`) and opens a detail panel — definition, "What helped", "What reduced the score", "Try next" — inside the **How Your Choices Affected This Run** section, which also shows the compact causal summary near the score.
+- **UI**: each Results metric card is a toggle (`aria-expanded`, stable `aria-controls` ids) whose explanation — definition, "What helped", "What reduced the score", "Try next" — expands **in place directly inside the tapped card**, spanning the full grid row (one open at a time; opening another collapses the first, with only a gentle `block:'nearest'` scroll adjustment). The **How Your Choices Affected This Run** panel below the grid stays a run-level executive summary (Biggest Help / Biggest Drag / Highest-Impact Change) and never duplicates the per-metric text.
+
+## Launch Anticipation Sequence
+
+Hitting **LAUNCH ONSALE** plays a ~4-second escalating "live onsale" moment (`src/game/launchSequence.ts` + `SimulationScreen.tsx`) before the Results reveal:
+
+- **Truth-telling, not decoration**: `buildLaunchSequence(level, config, projections, result)` is a pure presentation model derived from the *already-computed* deterministic result (computed at launch time in `App.tsx`; no second simulation). Bot leakage, server pressure (the projection's load-risk, since raw sim load saturates), wave style, checkout health, and allocation warnings all mirror the actual run — controlled configs look controlled, struggling configs visibly struggle. The final score is **never** shown before Results (test-pinned).
+- **Tension curve**: SYSTEM LIVE → REQUEST SURGE → BOT FILTER ENGAGED → ENTRY WAVES / SINGLE-WAVE RELEASE → CHECKOUT UNDER LOAD → FINALIZING (timings in `LAUNCH_TIMING`, total 4.0s). A compact pipeline (waiting room → bot filter → server → checkout → tickets-left countdown) lights up node by node; "LOAD CRITICAL" + subtle shake fire only when stability is genuinely below the critical band.
+- **Skip / replay**: a subtle keyboard-accessible "Skip to Results" appears after ~1s (Escape also skips). Reduced motion compresses the timeline to ~30% and drops packet/meter animation while keeping every informational state. Daily Challenge runs flow through the same screen with their generated venue/demand context; the Training Shift keeps its instant debrief.
+- Audio hooks (`request_surge`, `bot_filter`, `server_warning`, `checkout`, `result_reveal`) route through the existing no-op sink.
 
 ## Onboarding — Training Shift
 
@@ -341,7 +350,7 @@ Migration (in `records.test.ts`): missing/non-numeric/future versions reset to a
 
 - Tour-flag parsing/recovery (corrupt, wrong-version, unknown ids), persistence round-trip, accumulation across tours, no-window safety, and key separation from game records
 
-218 tests total, all passing.
+228 tests total, all passing.
 
 ## Accessibility
 

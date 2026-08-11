@@ -82,7 +82,7 @@ const STEPS: Step[] = [
     {
         title: 'Launch the onsale',
         icon: 'Zap',
-        body: "When you're happy with the projections, launch. The simulation runs your setup against the crowd and scores the result. Go ahead — you can't fail training.",
+        body: "When you launch a real mission, watch the live sequence — it shows how your choices affect traffic, bots, and server load before the score lands. Go ahead and launch — you can't fail training.",
         focus: 'launch',
     },
 ];

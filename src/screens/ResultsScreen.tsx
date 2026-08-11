@@ -76,6 +76,15 @@ export function ResultsScreen({ level, results, record, improvements, daily, onA
         return () => clearTimeout(t);
     }, []);
 
+    // Gentle scroll adjustment only: when a card expands (full-row span reflows the
+    // grid), keep its heading visible. block:'nearest' is a no-op if already on-screen.
+    useEffect(() => {
+        if (!openMetric) return;
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        document.getElementById(`qq-metric-card-${openMetric}`)
+            ?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+    }, [openMetric]);
+
     const rank = getRank(results.overallScore, level.parScore);
     const nextThreshold = nextRankThreshold(results.overallScore, level.parScore);
     const recommendation = generateRecommendation(results, level, rank);
@@ -240,40 +249,95 @@ export function ResultsScreen({ level, results, record, improvements, daily, onA
 
                 {showDetails && (
                     <>
+                        {/* Metric cards — tapping one expands its explanation IN PLACE,
+                            spanning the full grid row. Only one is open at a time. */}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4" data-tour="results-metrics">
                             {metrics.map((m, i) => {
                                 const colors = { good: { text: 'text-green-400', bar: 'bg-green-500' }, warning: { text: 'text-amber-400', bar: 'bg-amber-500' }, danger: { text: 'text-red-400', bar: 'bg-red-500' } }[m.status];
                                 const open = openMetric === m.id;
+                                const e = open ? explanationById.get(m.id) : undefined;
                                 return (
-                                    <button
-                                        key={m.id}
-                                        onClick={() => setOpenMetric(open ? null : m.id)}
-                                        aria-expanded={open}
-                                        aria-controls="qq-metric-detail"
-                                        className={`panel qq-press p-3 text-left animate-count-rise cursor-pointer border ${open ? 'border-cyan-400 glow-cyan' : 'hover:border-cyan-500/50'}`}
-                                        style={{ animationDelay: `${i * 60}ms` }}
-                                    >
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-[10px] uppercase tracking-wider text-slate-400">{m.label}</span>
-                                            <span className={colors.text}><Icon name={m.icon} className="w-3.5 h-3.5" /></span>
+                                    <div key={m.id} id={`qq-metric-card-${m.id}`} className={open ? 'col-span-2 md:col-span-3' : ''}>
+                                        <button
+                                            onClick={() => setOpenMetric(open ? null : m.id)}
+                                            aria-expanded={open}
+                                            aria-controls={`qq-metric-detail-${m.id}`}
+                                            className={`panel qq-press w-full p-3 text-left animate-count-rise cursor-pointer border ${open ? 'border-cyan-400 glow-cyan' : 'hover:border-cyan-500/50'}`}
+                                            style={{ animationDelay: `${i * 60}ms` }}
+                                        >
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span className="text-[10px] uppercase tracking-wider text-slate-400">{m.label}</span>
+                                                <span className={colors.text}><Icon name={m.icon} className="w-3.5 h-3.5" /></span>
+                                            </div>
+                                            <div className={`text-xl md:text-2xl font-bold ${colors.text} font-mono tabular-nums truncate`}>
+                                                <CountUpValue raw={m.raw} format={m.format} delayMs={i * 60} />
+                                                {m.displayMax && <span className="text-xs text-slate-500"> / {m.displayMax.toLocaleString()}</span>}
+                                            </div>
+                                            <div className="h-1 bg-slate-800 rounded-full overflow-hidden mt-1.5">
+                                                <div className={`h-full ${colors.bar} transition-all duration-700`} style={{ width: `${m.pct}%`, transitionDelay: `${i * 60}ms` }} />
+                                            </div>
+                                            <div className={`mt-1.5 text-[10px] flex items-center gap-1 ${open ? 'text-cyan-400' : 'text-slate-500'}`}>
+                                                <span aria-hidden>{open ? '▾' : '▸'}</span>
+                                                <span>{open ? 'Hide explanation' : 'Why this score?'}</span>
+                                            </div>
+                                        </button>
+
+                                        {/* Inline explanation — belongs to this card, opens right here. */}
+                                        <div id={`qq-metric-detail-${m.id}`} hidden={!open}>
+                                            {e && (
+                                                <div className="mt-1.5 rounded border border-cyan-500/40 bg-slate-900/40 overflow-hidden animate-fade-in-up">
+                                                    <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between gap-2">
+                                                        <span className="text-xs font-mono uppercase tracking-wider text-cyan-300 font-bold">{e.label} — {e.display}</span>
+                                                        <span className={`text-[10px] font-mono uppercase ${{ good: 'text-green-400', warning: 'text-amber-400', danger: 'text-red-400' }[e.tone]}`}>
+                                                            {e.tone === 'good' ? 'Healthy' : e.tone === 'warning' ? 'Strained' : 'Critical'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="p-3 space-y-2.5 text-xs">
+                                                        <div>
+                                                            <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-0.5">What it means</div>
+                                                            <p className="text-slate-200">{e.definition}</p>
+                                                        </div>
+                                                        {e.positiveFactors.length > 0 && (
+                                                            <div>
+                                                                <div className="text-[10px] font-mono uppercase tracking-wider text-green-400 mb-1">What helped</div>
+                                                                <ul className="space-y-1">
+                                                                    {e.positiveFactors.map((f, fi) => (
+                                                                        <li key={fi} className="flex items-start gap-1.5">
+                                                                            <span className="text-green-400 shrink-0 mt-0.5"><Icon name="Check" className="w-3 h-3" /></span>
+                                                                            <span className="text-slate-300"><span className="text-white font-semibold">{f.label}.</span> {f.detail}</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+                                                        {e.negativeFactors.length > 0 && (
+                                                            <div>
+                                                                <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 mb-1">What reduced the score</div>
+                                                                <ul className="space-y-1">
+                                                                    {e.negativeFactors.map((f, fi) => (
+                                                                        <li key={fi} className="flex items-start gap-1.5">
+                                                                            <span className="text-amber-400 shrink-0 mt-0.5"><Icon name="X" className="w-3 h-3" /></span>
+                                                                            <span className="text-slate-300"><span className="text-white font-semibold">{f.label}.</span> {f.detail}</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-start gap-1.5 pt-1 border-t border-slate-800">
+                                                            <span className="text-cyan-400 shrink-0 mt-0.5"><Icon name="Target" className="w-3 h-3" /></span>
+                                                            <span><span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400">Try next </span><span className="text-cyan-200">{e.recommendation}</span></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className={`text-xl md:text-2xl font-bold ${colors.text} font-mono tabular-nums truncate`}>
-                                            <CountUpValue raw={m.raw} format={m.format} delayMs={i * 60} />
-                                            {m.displayMax && <span className="text-xs text-slate-500"> / {m.displayMax.toLocaleString()}</span>}
-                                        </div>
-                                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden mt-1.5">
-                                            <div className={`h-full ${colors.bar} transition-all duration-700`} style={{ width: `${m.pct}%`, transitionDelay: `${i * 60}ms` }} />
-                                        </div>
-                                        <div className={`mt-1.5 text-[10px] flex items-center gap-1 ${open ? 'text-cyan-400' : 'text-slate-500'}`}>
-                                            <span aria-hidden>{open ? '▾' : '▸'}</span>
-                                            <span>{open ? 'Hide explanation' : 'Why this score?'}</span>
-                                        </div>
-                                    </button>
+                                    </div>
                                 );
                             })}
                         </div>
 
-                        {/* How your choices affected this run — causal summary + per-metric detail */}
+                        {/* Run-level executive summary. Per-metric explanations live
+                            inline in the cards above — never duplicated here. */}
                         <div className="panel mb-4" data-tour="results-causes">
                             <div className="panel-header">
                                 <span className="text-xs uppercase tracking-wider font-semibold">How Your Choices Affected This Run</span>
@@ -302,58 +366,6 @@ export function ResultsScreen({ level, results, record, improvements, daily, onA
                                     </div>
                                 </div>
 
-                                <p className="text-[11px] text-slate-500">
-                                    Tap any metric card above to see what it means and exactly which choices moved it.
-                                </p>
-
-                                {openMetric && explanationById.get(openMetric) && (() => {
-                                    const e = explanationById.get(openMetric)!;
-                                    const toneText = { good: 'text-green-400', warning: 'text-amber-400', danger: 'text-red-400' }[e.tone];
-                                    return (
-                                        <div id="qq-metric-detail" className="rounded border border-cyan-500/30 bg-slate-900/40 overflow-hidden">
-                                            <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between gap-2">
-                                                <span className="text-xs font-mono uppercase tracking-wider text-cyan-300 font-bold">{e.label} — {e.display}</span>
-                                                <span className={`text-[10px] font-mono uppercase ${toneText}`}>{e.tone === 'good' ? 'Healthy' : e.tone === 'warning' ? 'Strained' : 'Critical'}</span>
-                                            </div>
-                                            <div className="p-3 space-y-2.5 text-xs">
-                                                <div>
-                                                    <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-0.5">What it means</div>
-                                                    <p className="text-slate-200">{e.definition}</p>
-                                                </div>
-                                                {e.positiveFactors.length > 0 && (
-                                                    <div>
-                                                        <div className="text-[10px] font-mono uppercase tracking-wider text-green-400 mb-1">What helped</div>
-                                                        <ul className="space-y-1">
-                                                            {e.positiveFactors.map((f, i) => (
-                                                                <li key={i} className="flex items-start gap-1.5">
-                                                                    <span className="text-green-400 shrink-0 mt-0.5"><Icon name="Check" className="w-3 h-3" /></span>
-                                                                    <span className="text-slate-300"><span className="text-white font-semibold">{f.label}.</span> {f.detail}</span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                {e.negativeFactors.length > 0 && (
-                                                    <div>
-                                                        <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 mb-1">What reduced the score</div>
-                                                        <ul className="space-y-1">
-                                                            {e.negativeFactors.map((f, i) => (
-                                                                <li key={i} className="flex items-start gap-1.5">
-                                                                    <span className="text-amber-400 shrink-0 mt-0.5"><Icon name="X" className="w-3 h-3" /></span>
-                                                                    <span className="text-slate-300"><span className="text-white font-semibold">{f.label}.</span> {f.detail}</span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                <div className="flex items-start gap-1.5 pt-1 border-t border-slate-800">
-                                                    <span className="text-cyan-400 shrink-0 mt-0.5"><Icon name="Target" className="w-3 h-3" /></span>
-                                                    <span><span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400">Try next </span><span className="text-cyan-200">{e.recommendation}</span></span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
                             </div>
                         </div>
 

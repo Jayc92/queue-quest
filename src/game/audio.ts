@@ -17,7 +17,12 @@ export type SoundEvent =
     | 'slider'
     | 'decision'          // a live operational decision slides in
     | 'decision_correct'  // player took the correct call
-    | 'decision_wrong';   // player took the suboptimal call
+    | 'decision_wrong'    // player took the suboptimal call
+    | 'request_surge'     // launch sequence: traffic accelerates
+    | 'bot_filter'        // launch sequence: filters engage
+    | 'server_warning'    // launch sequence: genuine critical server stress
+    | 'checkout'          // launch sequence: checkout phase begins
+    | 'result_reveal';    // launch sequence: transition to Results
 
 export type AudioSink = (event: SoundEvent) => void;
 
@@ -42,4 +47,5 @@ export function playSound(event: SoundEvent): void {
 export const SOUND_EVENTS: readonly SoundEvent[] = [
     'queue_open', 'warning', 'launch', 'pass', 'fail', 'strong_clear', 'mastered', 'button', 'slider',
     'decision', 'decision_correct', 'decision_wrong',
+    'request_surge', 'bot_filter', 'server_warning', 'checkout', 'result_reveal',
 ];

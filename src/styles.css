@@ -648,6 +648,7 @@ button:focus-visible,
 @media (min-width: 768px) {
     .md\:block { display: block; }
     .md\:col-span-1 { grid-column: span 1 / span 1; }
+    .md\:col-span-3 { grid-column: span 3 / span 3; }
     .md\:flex { display: flex; }
     .md\:flex-wrap { flex-wrap: wrap; }
     .md\:justify-center { justify-content: center; }
@@ -736,4 +737,14 @@ button:focus-visible,
 @media (prefers-reduced-motion: no-preference) {
     .qq-tour-spotlight { transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease; }
     .qq-tour-panel { transition: top 0.2s ease, left 0.2s ease; }
+
+    /* Launch sequence: subtle shake for GENUINE critical server stress only. */
+    @keyframes qq-shake-kf {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-2px); }
+        40% { transform: translateX(2px); }
+        60% { transform: translateX(-1px); }
+        80% { transform: translateX(1px); }
+    }
+    .qq-shake { animation: qq-shake-kf 0.4s ease-in-out 2; }
 }
